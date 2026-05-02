@@ -6,7 +6,7 @@
  * DmxOutputMultiple<N> — drive N DMX universes in parallel from a single PIO state machine.
  *
  * Each universe is mapped to one GPIO pin; N consecutive pins starting at the base pin
- * supplied to begin(). The PIO program uses only OUT instructions (no side-set), allowing
+ * supplied to begin(). The PIO program uses MOV and OUT instructions (no side-set), allowing
  * up to 32 simultaneous universes from a single state machine.
  *
  * Supported values of N: 2, 4, 8, 16, 32.

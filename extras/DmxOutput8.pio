@@ -19,13 +19,11 @@
 ; Assert break condition for 176us (22 iterations x 8 cycles at 1MHz)
     set x, 21                   ; Preload counter (loop runs x+1 = 22 times)
 breakloop:
-    mov osr, null               ; Load OSR with zeros -> drive all pins LOW (break)
-    out pins, 8         [5]     ; Drive 8 pins LOW  (1 + 5 = 6 cycles)
+    mov pins, null      [6]     ; Drive 8 pins LOW  (1 + 6 = 7 cycles, bypasses OSR)
     jmp x-- breakloop           ; Decrement and loop (1 cycle) -- 8 cycles total per iteration
 
 ; Assert MAB (Mark After Break) for 16us
-    mov osr, ~null              ; Load OSR with ones -> drive all pins HIGH
-    out pins, 8         [14]    ; Drive 8 pins HIGH (1 + 14 = 15 cycles), total = 16us
+    mov pins, ~null     [15]    ; Drive 8 pins HIGH (1 + 15 = 16 cycles, bypasses OSR)
 
 ; Stream pre-packed bit-plane words (autopull, threshold = 8)
 .wrap_target
