@@ -1,0 +1,36 @@
+; Author: Elliot Matson
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; PIO program for outputting 4 DMX universes simultaneously on 4 consecutive pins.
+; Compliant with ANSI E1.11-2008 (R2018)
+; The program assumes a PIO clock frequency of exactly 1MHz
+;
+; Data format: caller supplies a pre-packed bit-plane buffer.
+; One 32-bit word per bit-time; lower 4 bits drive the 4 output pins:
+;   bit 0 -> pin (OUT_BASE + 0)  = universe 0
+;   bit 1 -> pin (OUT_BASE + 1)  = universe 1
+;   bit 2 -> pin (OUT_BASE + 2)  = universe 2
+;   bit 3 -> pin (OUT_BASE + 3)  = universe 3
+;
+; Each DMX byte expands to 11 words:
+;   word  0      : start bit  (0x00000000 - all pins LOW)
+;   words 1..8   : data bits, LSB first (bit k of word = bit from universe k)
+;   words 9..10  : stop bits  (0x0000000F - all pins HIGH)
+
+.program DmxOutput4
+
+; Assert break condition for 176us (22 iterations x 8 cycles at 1MHz)
+    set x, 21                   ; Preload counter (loop runs x+1 = 22 times)
+breakloop:
+    mov osr, null               ; Load OSR with zeros -> drive all pins LOW (break)
+    out pins, 4         [5]     ; Drive 4 pins LOW  (1 + 5 = 6 cycles)
+    jmp x-- breakloop           ; Decrement and loop (1 cycle) -- 8 cycles total per iteration
+
+; Assert MAB (Mark After Break) for 16us
+    mov osr, ~null              ; Load OSR with ones -> drive all pins HIGH
+    out pins, 4         [14]    ; Drive 4 pins HIGH (1 + 14 = 15 cycles), total = 16us
+
+; Stream pre-packed bit-plane words (autopull, threshold = 4)
+.wrap_target
+    out pins, 4         [3]     ; Output 4 bits (1 per universe), 1 + 3 = 4 cycles = 4us per bit
+.wrap
