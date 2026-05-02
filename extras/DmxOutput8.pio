@@ -1,4 +1,4 @@
-; Author: Elliot Matson
+; Author: Jostein Løwer, github: jostlowe
 ; SPDX-License-Identifier: BSD-3-Clause
 ;
 ; PIO program for outputting 8 DMX universes simultaneously on 8 consecutive pins.
