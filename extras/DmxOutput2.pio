@@ -1,0 +1,32 @@
+; Author: Jostein Løwer, github: jostlowe
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; PIO program for outputting 2 DMX universes simultaneously on 2 consecutive pins.
+; Compliant with ANSI E1.11-2008 (R2018)
+; The program assumes a PIO clock frequency of exactly 1MHz
+;
+; Data format: caller supplies a pre-packed bit-plane buffer.
+; One 32-bit word per bit-time; lower 2 bits drive the 2 output pins:
+;   bit 0 -> pin (OUT_BASE + 0)  = universe 0
+;   bit 1 -> pin (OUT_BASE + 1)  = universe 1
+;
+; Each DMX byte expands to 11 words:
+;   word  0      : start bit  (0x00000000 - all pins LOW)
+;   words 1..8   : data bits, LSB first (bit k of word = bit from universe k)
+;   words 9..10  : stop bits  (0x00000003 - all pins HIGH)
+
+.program DmxOutput2
+
+; Assert break condition for 176us (22 iterations x 8 cycles at 1MHz)
+    set x, 21                   ; Preload counter (loop runs x+1 = 22 times)
+breakloop:
+    mov pins, null      [6]     ; Drive 2 pins LOW  (7 cycles) + jmp (1 cycle) = 8 cycles/iter, bypasses OSR
+    jmp x-- breakloop           ; Decrement and loop -- total: 8 cycles x 22 = 176us
+
+; Assert MAB (Mark After Break) for 16us
+    mov pins, ~null     [15]    ; Drive 2 pins HIGH (1 + 15 = 16 cycles), bypasses OSR
+
+; Stream pre-packed bit-plane words (autopull, threshold = 2)
+.wrap_target
+    out pins, 2         [3]     ; Output 2 bits (1 per universe), 1 + 3 = 4 cycles = 4us per bit
+.wrap
