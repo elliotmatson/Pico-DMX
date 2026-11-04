@@ -128,3 +128,46 @@ However, we can compile them manually using `pioasm`. The result is a header fil
 
 Manual compilation requires cloning the pico sdk, compiling the `pioasm` tool, and running it like so:
 `pioasm src/DmxInput.pio src/DmxInput.pio.h`
+
+
+## Many outputs from one state machine: `DmxStreamOutput`
+
+`DmxStreamOutput` drives up to 32 pins from a single PIO state machine and DMA channel. Each 32-bit word is one 4 µs DMX bit-time across every pin. You build frames with `DmxFrameEncoder`, which lets every line have its own data, channel count, break and MAB, and optional transceiver DE pins in the same word.
+
+```cpp
+#include <DmxFrameEncoder.h>
+#include <DmxStreamOutput.h>
+
+DmxStreamOutput out;
+uint8_t universes[12][513];  // [0] = start code
+dmxstream::Lane lanes[12];
+uint32_t frame[dmxstream::maxFrameWords()];
+
+void setup() {
+    out.begin(/*pinBase=*/1, /*pinCount=*/12, /*idleMask=*/0xFFF);
+    for (int i = 0; i < 12; i++) {
+        lanes[i].enabled = true;
+        lanes[i].dataBit = i;
+        lanes[i].slots = universes[i];
+        lanes[i].slotCount = 513;
+    }
+}
+
+void loop() {
+    if (!out.busy()) {
+        size_t n = dmxstream::encodeFrame(frame, sizeof frame / 4, lanes, 12);
+        out.send(frame, n);  // double-buffer for back-to-back frames
+    }
+}
+```
+
+- `busy()` stays true until the last bit-time has left the pins, so a new frame never cuts off the previous one. `DmxOutput::busy()` returns as soon as the DMA finishes.
+- The state machine is never restarted between frames, because break and MAB are part of the data.
+- The encoder is plain C++. Its host test runs with:
+
+```bash
+c++ -std=c++17 -I src test/host/test_frame_encoder.cpp src/DmxFrameEncoder.cpp -o /tmp/t && /tmp/t
+```
+
+- On a 150 MHz RP2350, encoding 12 full universes takes about 2.8 ms per frame (22.8 ms frame time).
+- Requires pico-sdk 2.x (RP2040 or RP2350, including GPIOs above 31 on the RP2350B).
