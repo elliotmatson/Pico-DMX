@@ -35,6 +35,9 @@ struct Lane {
     uint16_t mabUs = 16;
     const uint8_t* slots = nullptr;  // [0] = start code
     uint16_t slotCount = 0;          // including the start code, <= kMaxSlots
+    // RDM: release DE (driver off) as soon as this lane's packet ends instead
+    // of holding it for the whole frame, so a responder can reply.
+    bool releaseDe = false;
 };
 
 // Words a lane needs for one frame (break + MAB + slots), after clamping its
@@ -56,11 +59,14 @@ constexpr uint32_t maxFrameWords(uint16_t maxBreakUs = 1000, uint16_t maxMabUs =
 // When every enabled lane shares the same break and MAB (the usual case) a
 // slot-major fast path writes each word once; otherwise each lane is applied
 // in turn. Both produce identical output.
-size_t encodeFrame(uint32_t* out, size_t capacity, const Lane* lanes, size_t count);
+//
+// `minWords` pads the frame with idle words (e.g. to leave room for RDM
+// replies when every lane is short).
+size_t encodeFrame(uint32_t* out, size_t capacity, const Lane* lanes, size_t count, size_t minWords = 0);
 
 namespace detail {
 // The general per-lane path, exposed so tests can compare it with the fast path.
-size_t encodeFramePerLane(uint32_t* out, size_t capacity, const Lane* lanes, size_t count);
+size_t encodeFramePerLane(uint32_t* out, size_t capacity, const Lane* lanes, size_t count, size_t minWords = 0);
 }  // namespace detail
 
 }  // namespace dmxstream

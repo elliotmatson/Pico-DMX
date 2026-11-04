@@ -33,7 +33,7 @@ uint32_t laneWords(const Lane& l) {
 }
 
 // Idle pattern (data at mark, DE high on enabled lanes) and frame length.
-static size_t frameSetup(const Lane* lanes, size_t count, uint32_t& idle) {
+static size_t frameSetup(const Lane* lanes, size_t count, uint32_t& idle, size_t minWords) {
     idle = 0;
     size_t total = 0;
     for (size_t i = 0; i < count; i++) {
@@ -51,14 +51,32 @@ static size_t frameSetup(const Lane* lanes, size_t count, uint32_t& idle) {
             }
         }
     }
+    if (total < minWords) {
+        total = minWords;
+    }
     return total == 0 ? 1 : total;  // one idle word keeps the stream well-defined
+}
+
+// Drop DE after the packet on lanes that release it (RDM requests).
+static void releaseDe(uint32_t* out, size_t total, const Lane* lanes, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        const Lane& l = lanes[i];
+        if (!l.enabled || !l.releaseDe || l.deBit < 0) {
+            continue;
+        }
+        const uint32_t clear = ~(1u << l.deBit);
+        for (size_t w = laneWords(l); w < total; w++) {
+            out[w] &= clear;
+        }
+    }
 }
 
 namespace detail {
 
-size_t DMX_ENCODER_RAM(encodeFramePerLane)(uint32_t* out, size_t capacity, const Lane* lanes, size_t count) {
+size_t DMX_ENCODER_RAM(encodeFramePerLane)(uint32_t* out, size_t capacity, const Lane* lanes, size_t count,
+                                           size_t minWords) {
     uint32_t idle;
-    const size_t total = frameSetup(lanes, count, idle);
+    const size_t total = frameSetup(lanes, count, idle, minWords);
     if (total > capacity) {
         return 0;
     }
@@ -89,6 +107,7 @@ size_t DMX_ENCODER_RAM(encodeFramePerLane)(uint32_t* out, size_t capacity, const
             // p[9], p[10]: stop bits stay at mark
         }
     }
+    releaseDe(out, total, lanes, count);
     return total;
 }
 
@@ -111,7 +130,8 @@ inline uint64_t transpose8(uint64_t x) {
 
 }  // namespace
 
-size_t DMX_ENCODER_RAM(encodeFrame)(uint32_t* out, size_t capacity, const Lane* lanes, size_t count) {
+size_t DMX_ENCODER_RAM(encodeFrame)(uint32_t* out, size_t capacity, const Lane* lanes, size_t count,
+                                    size_t minWords) {
     // Fast path only when every enabled lane starts its slots at the same word.
     int brk = -1, mab = -1;
     for (size_t i = 0; i < count; i++) {
@@ -123,12 +143,12 @@ size_t DMX_ENCODER_RAM(encodeFrame)(uint32_t* out, size_t capacity, const Lane* 
         if (brk < 0) {
             brk = b, mab = m;
         } else if (b != brk || m != mab) {
-            return detail::encodeFramePerLane(out, capacity, lanes, count);
+            return detail::encodeFramePerLane(out, capacity, lanes, count, minWords);
         }
     }
 
     uint32_t idle;
-    const size_t total = frameSetup(lanes, count, idle);
+    const size_t total = frameSetup(lanes, count, idle, minWords);
     if (total > capacity) {
         return 0;
     }
@@ -217,6 +237,7 @@ size_t DMX_ENCODER_RAM(encodeFrame)(uint32_t* out, size_t capacity, const Lane* 
     for (uint32_t* e = out + total; p < e; p++) {
         *p = idle;
     }
+    releaseDe(out, total, lanes, count);
     return total;
 }
 
