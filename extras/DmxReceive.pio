@@ -1,0 +1,45 @@
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; DMX512 (ANSI E1.11) receiver that reports every slot and every break.
+;
+; Run at 1 MHz (4 cycles per bit). The state machine pushes one 32-bit word
+; per event:
+;   slot            bits 0-7 = received byte (LSB first on the wire)
+;   framing error   bit 31 set, bits 0-7 = the byte as sampled (stop bit low,
+;                   line back at mark within ~80 us of the falling edge)
+;   break           bit 30 set (line held low for at least ~80 us)
+; Breaks are told apart by duration, not by the byte value, so a break that
+; starts in the middle of a mis-synchronised "byte" is still seen as a break.
+;
+; Pushes use noblock: if software falls behind, words are dropped rather than
+; the receiver stalling mid-byte.
+
+.program DmxReceive
+.wrap_target
+start:
+    wait 0 pin 0        ; falling edge: start bit (or break)
+    set x, 7 [4]        ; land in the middle of data bit 0 (6 us after the edge)
+bits:
+    in pins, 1          ; LSB first, shifting right into the ISR
+    jmp x-- bits [2]    ; 4 us per bit; x ends at 0xFFFFFFFF
+    jmp pin stop_ok     ; sample the first stop bit (38 us after the edge)
+    set y, 10           ; stop bit low: watch the line for 11 x 4 us more
+low:
+    jmp pin framing     ; back at mark early: a framing error, not a break
+    jmp y-- low [2]
+    mov isr, null       ; still low ~83 us after the edge: a break
+    set y, 1
+    in y, 1
+    in null, 1          ; ISR = bit 30
+    push noblock
+    wait 1 pin 0        ; wait out the rest of the break
+    jmp start
+framing:
+    in null, 23         ; byte to bits 0-7 ...
+    in x, 1             ; ... and a 1 (from x) into bit 31
+    push noblock
+    jmp start
+stop_ok:
+    in null, 24         ; byte to bits 0-7, bits 30-31 clear
+    push noblock
+.wrap

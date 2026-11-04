@@ -171,3 +171,16 @@ c++ -std=c++17 -I src test/host/test_frame_encoder.cpp src/DmxFrameEncoder.cpp -
 
 - On a 150 MHz RP2350, encoding 12 full universes takes about 2.8 ms per frame (22.8 ms frame time).
 - Requires pico-sdk 2.x (RP2040 or RP2350, including GPIOs above 31 on the RP2350B).
+
+## Receiving any packet length: `DmxReceiver`
+
+`DmxReceiver` runs one DMX input on one PIO state machine. DMA writes into an endless ring buffer, so no interrupt is needed. `poll()` feeds the received words to a `DmxFrameParser`, which splits them into packets at each break. Packets of any length (1–513 slots) work. Upstream `DmxInput` waits for a fixed byte count, so shorter packets never complete and later ones land misaligned.
+
+- **Breaks:** the PIO program reports a break by how long the line stays low, not by the byte value. A receiver that joins mid-packet and is out of sync still sees the next break.
+- **Bad packets:** packets with framing errors are counted and dropped.
+- **Shared pins:** with `claimPin = false`, the receiver can listen to a pin that something else drives, which is useful for loopback tests.
+- **Host test:**
+
+```bash
+c++ -std=c++17 -I src test/host/test_frame_parser.cpp src/DmxFrameParser.cpp src/DmxFrameEncoder.cpp -o /tmp/p && /tmp/p
+```
