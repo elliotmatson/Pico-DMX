@@ -3,6 +3,7 @@
 //
 //   c++ -std=c++17 -I src test/host/test_frame_encoder.cpp src/DmxFrameEncoder.cpp -o /tmp/t && /tmp/t
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <random>
@@ -179,8 +180,32 @@ static void testFastPathMatchesPerLane() {
     }
 }
 
+// RDM: a lane that releases DE drops it right after its packet; padding
+// stretches the frame; both paths agree.
+static void testReleaseDeAndPadding() {
+    std::vector<uint8_t> dmx(kMaxSlots, 0x11), rdm(26, 0x55);
+    dmx[0] = 0x00;
+    rdm[0] = 0xCC;
+    Lane lanes[2];
+    lanes[0].enabled = lanes[1].enabled = true;
+    lanes[0].dataBit = 0, lanes[0].deBit = 8, lanes[0].slots = dmx.data(), lanes[0].slotCount = 100;
+    lanes[1].dataBit = 1, lanes[1].deBit = 9, lanes[1].slots = rdm.data(), lanes[1].slotCount = 26;
+    lanes[1].releaseDe = true;
+    const size_t pad = 4000;
+    std::vector<uint32_t> a(maxFrameWords()), b(maxFrameWords());
+    const size_t na = encodeFrame(a.data(), a.size(), lanes, 2, pad);
+    const size_t nb = detail::encodeFramePerLane(b.data(), b.size(), lanes, 2, pad);
+    CHECK(na == pad && nb == pad, "padded to %zu / %zu", na, nb);
+    CHECK(std::equal(a.begin(), a.begin() + na, b.begin()), "fast and per-lane paths agree");
+    const size_t end = laneWords(lanes[1]);
+    CHECK(((a[end - 1] >> 9) & 1) && !((a[end] >> 9) & 1) && !((a[na - 1] >> 9) & 1), "DE drops at word %zu", end);
+    CHECK(((a[na - 1] >> 8) & 1), "the DMX lane keeps DE for the whole frame");
+    CHECK(((a[na - 1] >> 1) & 1), "the RDM lane idles at mark after its packet");
+}
+
 int main() {
     testTwelveLanesWithDe();
+    testReleaseDeAndPadding();
     testFastPathMatchesPerLane();
     testCapacityAndEmpty();
     if (failures) {
