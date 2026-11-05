@@ -1,0 +1,30 @@
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; Parallel WS2812/SK6812 output on up to 16 pins from one state machine.
+;
+; Clock 8 MHz (125 ns per cycle); one data bit is 10 cycles = 1.25 us
+; (800 kbit/s):
+;   375 ns  every lane taking part goes high
+;   375 ns  each lane holds its data bit (1 = stays high, 0 = falls)
+;   500 ns  every lane low
+; so a 0 is 375 ns high / 875 ns low and a 1 is 750 ns high / 500 ns low,
+; inside the WS2812B and SK6812 tolerances (T0H 220-420 ns ... T1H 580-1000
+; ns, depending on part).
+;
+; A frame in the FIFO (16-bit words, autopull at 16) is:
+;   word 0      mask of lanes taking part (others stay low)
+;   word 1      number of bit-times minus 1
+;   words 2...  one word per bit-time, bit n = lane n's data bit
+; Afterwards the state machine waits for the next frame with the lines low,
+; which is the strip's latch/reset period.
+
+.program PixelStream
+.wrap_target
+    out x, 16           ; lane mask
+    out y, 16           ; bit-times - 1
+bit:
+    mov pins, x   [2]   ; 3 cycles: lanes high
+    out pins, 16  [2]   ; 3 cycles: data
+    mov pins, null [2]  ; 3 cycles low ...
+    jmp y-- bit         ; ... + 1 = 10 cycles per bit
+.wrap
