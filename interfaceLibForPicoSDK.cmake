@@ -9,15 +9,24 @@ add_library(picodmx INTERFACE)
 target_sources(picodmx INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/src/DmxInput.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/DmxOutput.cpp
+    # Multi-port streaming engines and their host-testable encoders/parser
+    ${CMAKE_CURRENT_LIST_DIR}/src/DmxFrameEncoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/DmxFrameParser.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/DmxReceiver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/DmxStreamOutput.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/PixelFrameEncoder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/PixelStreamOutput.cpp
 )
 
-pico_generate_pio_header(picodmx
-    ${CMAKE_CURRENT_LIST_DIR}/extras/DmxInput.pio
-)
-pico_generate_pio_header(picodmx
-    ${CMAKE_CURRENT_LIST_DIR}/extras/DmxOutput.pio
-)
+pico_generate_pio_header(picodmx ${CMAKE_CURRENT_LIST_DIR}/extras/DmxInput.pio)
+pico_generate_pio_header(picodmx ${CMAKE_CURRENT_LIST_DIR}/extras/DmxInputInverted.pio)
+pico_generate_pio_header(picodmx ${CMAKE_CURRENT_LIST_DIR}/extras/DmxOutput.pio)
+pico_generate_pio_header(picodmx ${CMAKE_CURRENT_LIST_DIR}/extras/DmxReceive.pio)
+pico_generate_pio_header(picodmx ${CMAKE_CURRENT_LIST_DIR}/extras/DmxStream.pio)
+pico_generate_pio_header(picodmx ${CMAKE_CURRENT_LIST_DIR}/extras/PixelStream.pio)
 
 target_include_directories(picodmx INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/src
 )
+
+target_link_libraries(picodmx INTERFACE hardware_pio hardware_dma hardware_irq)
