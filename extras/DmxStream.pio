@@ -1,0 +1,18 @@
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; Waveform streamer for many DMX512 (ANSI E1.11) lines at once.
+;
+; Every 32-bit FIFO word is one 4 us DMX bit-time. Each bit of the word drives
+; one OUT pin (OUT_BASE + n), so a single state machine can drive up to 32
+; lines, e.g. 12 transceiver DI pins plus their 12 DE pins. Break, MAB, start
+; bits, data and stop bits are all precomputed in the buffer (see
+; DmxFrameEncoder), so each line can carry different data, lengths and timing.
+;
+; Run at 1 MHz with autopull at 32 bits. When the FIFO runs dry the OUT stalls
+; and the pins hold the last word, which the encoder always ends with the lines
+; idle (mark).
+
+.program DmxStream
+.wrap_target
+    out pins, 32 [3]   ; 1 + 3 cycles = 4 us per bit-time
+.wrap
