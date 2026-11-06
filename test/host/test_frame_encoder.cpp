@@ -133,6 +133,10 @@ static void testCapacityAndEmpty() {
     off.dataBit = 0;
     uint32_t one[1];
     CHECK(encodeFrame(one, 1, &off, 1) == 1 && one[0] == 1u, "all-disabled must give one idle word");
+    uint32_t pad[300];
+    const size_t n = encodeFrame(pad, 300, &off, 1, 250);
+    CHECK(n == 250 && pad[249] == 1u && detail::encodeFramePerLane(pad, 300, &off, 1, 250) == 250,
+          "all-disabled pads to minWords on both paths");
 }
 
 // Uniform timing takes the fast path; it must match the per-lane path exactly
@@ -203,7 +207,37 @@ static void testReleaseDeAndPadding() {
     CHECK(((a[na - 1] >> 1) & 1), "the RDM lane idles at mark after its packet");
 }
 
+// A lane sitting a frame out keeps its driver on with holdDe, and drops it
+// without; neither sends data. A frame of only holding lanes still holds DE.
+static void testHoldDe() {
+    std::vector<uint8_t> dmx(kMaxSlots, 0x00);
+    Lane lanes[3];
+    lanes[0].enabled = true;
+    lanes[0].dataBit = 0, lanes[0].deBit = 8, lanes[0].slots = dmx.data(), lanes[0].slotCount = 10;
+    lanes[1].dataBit = 1, lanes[1].deBit = 9, lanes[1].holdDe = true;
+    lanes[2].dataBit = 2, lanes[2].deBit = 10;
+    std::vector<uint32_t> a(maxFrameWords()), b(maxFrameWords());
+    const size_t na = encodeFrame(a.data(), a.size(), lanes, 3);
+    const size_t nb = detail::encodeFramePerLane(b.data(), b.size(), lanes, 3);
+    CHECK(na == nb && std::equal(a.begin(), a.begin() + na, b.begin()), "fast and per-lane paths agree");
+    bool held = true, mark = true, dropped = true;
+    for (size_t i = 0; i < na; i++) {
+        held = held && ((a[i] >> 9) & 1);
+        mark = mark && ((a[i] >> 1) & 1) && ((a[i] >> 2) & 1);
+        dropped = dropped && !((a[i] >> 10) & 1);
+    }
+    CHECK(held, "the holding lane keeps DE for the whole frame");
+    CHECK(mark, "disabled lanes stay at mark");
+    CHECK(dropped, "a disabled lane without holdDe drops DE");
+
+    lanes[0].enabled = false;
+    const size_t n = encodeFrame(a.data(), a.size(), lanes, 3, 250);
+    CHECK(n == 250 && ((a[0] >> 9) & 1) && ((a[n - 1] >> 9) & 1) && !((a[0] >> 8) & 1),
+          "an idle frame holds DE only on the holding lane");
+}
+
 int main() {
+    testHoldDe();
     testTwelveLanesWithDe();
     testReleaseDeAndPadding();
     testFastPathMatchesPerLane();

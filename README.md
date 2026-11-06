@@ -163,6 +163,8 @@ void loop() {
 
 - `busy()` stays true until the last bit-time has left the pins, so a new frame never cuts off the previous one. `DmxOutput::busy()` returns as soon as the DMA finishes.
 - The state machine is never restarted between frames, because break and MAB are part of the data.
+- DE: an enabled lane holds DE high for the whole frame; `releaseDe` drops it right after the lane's packet (RDM requests). A disabled lane drops DE, unless `holdDe` is set: then its driver stays on with the line at mark, e.g. for an output sitting a frame out or a pin lent to a pixel stream. The last word of a frame stays on the pins until the next one.
+- With no lane enabled, `encodeFrame` writes idle words: one, or `minWords` when given.
 - The encoder is plain C++. Its host test runs with:
 
 ```bash
