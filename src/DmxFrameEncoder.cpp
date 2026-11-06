@@ -32,7 +32,8 @@ uint32_t laneWords(const Lane& l) {
     return breakWords(l) + mabWords(l) + slotCount(l) * kWordsPerSlot;
 }
 
-// Idle pattern (data at mark, DE high on enabled lanes) and frame length.
+// Idle pattern (data at mark, DE high on enabled and holding lanes) and
+// frame length.
 static size_t frameSetup(const Lane* lanes, size_t count, uint32_t& idle, size_t minWords) {
     idle = 0;
     size_t total = 0;
@@ -41,7 +42,7 @@ static size_t frameSetup(const Lane* lanes, size_t count, uint32_t& idle, size_t
         if (l.dataBit >= 0) {
             idle |= 1u << l.dataBit;
         }
-        if (l.enabled && l.deBit >= 0) {
+        if ((l.enabled || l.holdDe) && l.deBit >= 0) {
             idle |= 1u << l.deBit;
         }
         if (l.enabled) {
@@ -153,8 +154,11 @@ size_t DMX_ENCODER_RAM(encodeFrame)(uint32_t* out, size_t capacity, const Lane* 
         return 0;
     }
     if (brk < 0) {
-        out[0] = idle;
-        return 1;
+        // Nothing to send: idle words only (one, or minWords of padding).
+        for (size_t w = 0; w < total; w++) {
+            out[w] = idle;
+        }
+        return total;
     }
 
     // Compact list of active lanes; sorted order is not required.

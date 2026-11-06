@@ -38,6 +38,12 @@ struct Lane {
     // RDM: release DE (driver off) as soon as this lane's packet ends instead
     // of holding it for the whole frame, so a responder can reply.
     bool releaseDe = false;
+    // A disabled lane normally drops DE (driver off). With holdDe it keeps
+    // DE high and its line at mark instead: an output sitting a frame out
+    // (slow refresh, Delta mode, stopped on loss), or a lane whose data pin
+    // is driven by something else for now (e.g. a pixel stream) but whose
+    // transceiver must stay on.
+    bool holdDe = false;
 };
 
 // Words a lane needs for one frame (break + MAB + slots), after clamping its
@@ -53,8 +59,8 @@ constexpr uint32_t maxFrameWords(uint16_t maxBreakUs = 1000, uint16_t maxMabUs =
 // Encode one frame for `count` lanes into `out`. Returns the number of words
 // written (the longest lane), or 0 if `capacity` is too small.
 //
-// Disabled lanes hold their data pin at mark and DE (if any) low. Enabled
-// lanes hold DE high for the whole frame.
+// Disabled lanes hold their data pin at mark and DE (if any) low, or high
+// with holdDe. Enabled lanes hold DE high for the whole frame.
 //
 // When every enabled lane shares the same break and MAB (the usual case) a
 // slot-major fast path writes each word once; otherwise each lane is applied
